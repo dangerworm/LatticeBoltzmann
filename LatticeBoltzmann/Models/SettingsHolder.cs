@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using LatticeBoltzmann.Annotations;
@@ -25,131 +26,79 @@ namespace LatticeBoltzmann.Models
         public double Length
         {
             get => _length;
-            set
-            {
-                _length = value;
-                OnPropertyChanged(nameof(Length));
-            }
+            set => SetPropertyField(nameof(Length), ref _length, value);
         }
 
         public double Width
         {
             get => _width;
-            set
-            {
-                _width = value;
-                OnPropertyChanged(nameof(Width));
-            }
+            set => SetPropertyField(nameof(Width), ref _width, value);
         }
 
         public double H0
         {
             get => _h0;
-            set
-            {
-                _h0 = value;
-                OnPropertyChanged(nameof(H0));
-            }
+            set => SetPropertyField(nameof(H0), ref _h0, value);
         }
 
         public double V0
         {
             get => _v0;
-            set
-            {
-                _v0 = value;
-                OnPropertyChanged(nameof(V0));
-            }
+            set => SetPropertyField(nameof(V0), ref _v0, value);
         }
 
         public double Q0
         {
             get => _q0;
-            set
-            {
-                _q0 = value;
-                OnPropertyChanged(nameof(Q0));
-            }
+            set => SetPropertyField(nameof(Q0), ref _q0, value);
         }
 
         public double Lx
         {
             get => _Lx;
-            set
-            {
-                _Lx = value;
-                OnPropertyChanged(nameof(Lx));
-            }
+            set => SetPropertyField(nameof(Lx), ref _Lx, value);
         }
 
         public double Ly
         {
             get => _Ly;
-            set
-            {
-                _Ly = value;
-                OnPropertyChanged(nameof(Ly));
-            }
+            set => SetPropertyField(nameof(Ly), ref _Ly, value);
         }
 
         public double MaxT
         {
             get => _max_t;
-            set
-            {
-                _max_t = value;
-                OnPropertyChanged(nameof(MaxT));
-            }
+            set => SetPropertyField(nameof(MaxT), ref _max_t, value);
         }
 
         public double AccelerationDueToGravity
         {
             get => _accelerationDueToGravity;
-            set
-            {
-                _accelerationDueToGravity = value;
-                OnPropertyChanged(nameof(AccelerationDueToGravity));
-            }
+            set => SetPropertyField(nameof(AccelerationDueToGravity), ref _accelerationDueToGravity, value);
         }
 
         public double Fb
         {
             get => _fb;
-            set
-            {
-                _fb = value;
-                OnPropertyChanged(nameof(Fb));
-            }
+            set => SetPropertyField(nameof(Fb), ref _fb, value);
         }
 
         public double SolidRadius
         {
             get => _r;
-            set
-            {
-                _r = value;
-                OnPropertyChanged(nameof(SolidRadius));
-            }
+            set => SetPropertyField(nameof(SolidRadius), ref _r, value);
         }
 
         public double D
         {
             get => _D;
-            set
-            {
-                _D = value;
-                OnPropertyChanged(nameof(D));
-            }
+            set => SetPropertyField(nameof(D), ref _D, value);
         }
 
         public double E
         {
             get => _e;
-            set
-            {
-                _e = value;
-                OnPropertyChanged(nameof(E));
-            }
+            set => SetPropertyField(nameof(E), ref _e, value);
         }
 
         // Calculated based on values above
@@ -174,6 +123,13 @@ namespace LatticeBoltzmann.Models
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        protected void SetPropertyField<T>(string propertyName, ref T field, T newValue)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, newValue)) return;
+            field = newValue;
+            OnPropertyChanged(propertyName);
         }
 
         public SettingsHolder(double length, double width, double h0,
