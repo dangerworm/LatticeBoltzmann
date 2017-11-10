@@ -7,39 +7,49 @@ namespace LatticeBoltzmann.Views
 {
     public partial class Main : Form
     {
-        private readonly SettingsHolder _settings;
+        private LatticeBoltzmannSimulator _simulator;
 
         public Main()
         {
             InitializeComponent();
+            InitializeSimulator();
+        }
 
-            _settings = new SettingsHolder(
+        private void InitializeSimulator()
+        {
+            _simulator = new LatticeBoltzmannSimulator(
                 20, 5.5, 0.8, 0, 2.2, 201, 56, 1,
                 9.81, 0.00248, 0.25, 0.5, 10);
 
-            InitializeSettingsEditor();
-        }
+            _simulator.PropertyChanged += SettingChanged;
 
-        private void InitializeSettingsEditor()
-        {
-            secSettingsEditor.SetDataSource(_settings);
-            _settings.PropertyChanged += SettingChanged;
+            var circle = new Circle(10, 5.5 / 2);
+            _simulator.AddShape(circle);
+
+            secSettingsEditor.SetDataSource(_simulator);
+
         }
 
         private void SettingChanged(object sender, PropertyChangedEventArgs eventArgs)
         {
             var value = GetSettingValue(eventArgs.PropertyName);
             tssStatus.Text = $@"{eventArgs.PropertyName} changed to {value}.";
+            CalculateValues();
         }
 
         private string GetSettingValue(string propertyName)
         {
-            var properties = _settings.GetType().GetProperties();
+            var properties = _simulator.GetType().GetProperties();
             return properties
                 .FirstOrDefault(x => x.Name.Equals(propertyName))?
                 .GetGetMethod()
-                .Invoke(_settings, null)
+                .Invoke(_simulator, null)
                 .ToString();
+        }
+
+        private void CalculateValues()
+        {
+            
         }
     }
 }

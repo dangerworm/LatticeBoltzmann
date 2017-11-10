@@ -9,13 +9,13 @@ namespace LatticeBoltzmann.Controls
     {
         public StringSettingControl(ISetting<string> setting)
             : this(setting.SettingName, setting.Value,
-            setting.SettingsHolder, setting.SetMethod)
+            setting.Simulator, setting.SetMethod)
         {
         }
 
         public StringSettingControl(string settingName, string value,
-            SettingsHolder settingsHolder, MethodInfo setMethod)
-            : base(settingName, value, settingsHolder, setMethod)
+            ISimulator simulator, MethodInfo setMethod)
+            : base(settingName, value, simulator, setMethod)
         {
             InitializeComponent();
 

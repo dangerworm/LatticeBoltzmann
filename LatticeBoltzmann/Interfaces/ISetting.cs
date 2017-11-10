@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Reflection;
-using LatticeBoltzmann.Models;
 
 namespace LatticeBoltzmann.Interfaces
 {
@@ -9,7 +8,7 @@ namespace LatticeBoltzmann.Interfaces
         string SettingName { get; set; }
         Type Type { get; }
 
-        SettingsHolder SettingsHolder { get; }
+        ISimulator Simulator { get; }
         MethodInfo SetMethod { get; }
     }
 }

@@ -10,16 +10,16 @@ namespace LatticeBoltzmann.Models
         public T Value { get; set; }
         public Type Type => typeof(T);
 
-        public SettingsHolder SettingsHolder { get; }
+        public ISimulator Simulator { get; }
         public MethodInfo SetMethod { get; }
 
         public Setting(string settingName, T value,
-            SettingsHolder settingsHolder, MethodInfo setMethod)
+            ISimulator settingsHolder, MethodInfo setMethod)
         {
             SettingName = settingName;
             Value = value;
 
-            SettingsHolder = settingsHolder;
+            Simulator = settingsHolder;
             SetMethod = setMethod;
         }
     }

@@ -20,12 +20,14 @@ namespace LatticeBoltzmann.Helpers
 
         public static Type GetTypeFromString(this string value)
         {
-            if (int.TryParse(value, out int intResult))
+            int intResult;
+            if (int.TryParse(value, out intResult))
             {
                 return typeof(int);
             }
 
-            if (double.TryParse(value, out double doubleResult))
+            double doubleResult;
+            if (double.TryParse(value, out doubleResult))
             {
                 return typeof(double);
             }

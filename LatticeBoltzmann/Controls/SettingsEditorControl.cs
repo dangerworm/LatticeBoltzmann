@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
+using LatticeBoltzmann.Helpers;
 using LatticeBoltzmann.Interfaces;
 using LatticeBoltzmann.Models;
 
@@ -11,16 +12,16 @@ namespace LatticeBoltzmann.Controls
     {
         public Collection<UserControl> SettingControls { get; private set; }
 
-        private SettingsHolder _settings { get; set; }
+        private ISimulator _simulator { get; set; }
 
         public SettingsEditorControl()
         {
             InitializeComponent();
         }
 
-        public void SetDataSource(SettingsHolder settings)
+        public void SetDataSource(ISimulator settings)
         {
-            _settings = settings;
+            _simulator = settings;
             InitializeControls();
         }
 
@@ -29,7 +30,7 @@ namespace LatticeBoltzmann.Controls
             SettingControls = new Collection<UserControl>();
             
             // Reflection
-            var properties = _settings
+            var properties = _simulator
                 .GetType()
                 .GetProperties()
                 .Where(x => x.CanWrite);
@@ -82,8 +83,8 @@ namespace LatticeBoltzmann.Controls
 
         private ISetting<T> GetSetting<T>(PropertyInfo property)
         {
-            var value = (T)property.GetGetMethod().Invoke(_settings, null);
-            return new Setting<T>(property.Name, value, _settings, property.GetSetMethod());
+            var value = (T)property.GetGetMethod().Invoke(_simulator, null);
+            return new Setting<T>(property.GetDescription(), value, _simulator, property.GetSetMethod());
         }
     }
 }
