@@ -11,6 +11,6 @@
             Y = y;
         }
 
-        public abstract bool IsSolid(double x, double y, double r);
+        public abstract bool IsSolid(double x, double y);
     }
 }
