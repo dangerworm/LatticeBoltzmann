@@ -1,65 +1,79 @@
 ﻿using System;
 using System.ComponentModel;
-using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using LatticeBoltzmann.Models;
-using MLApp;
 
 namespace LatticeBoltzmann.Views
 {
     public partial class Main : Form
     {
         private LatticeBoltzmannSimulator _simulator;
-        private MLApp.MLApp _matLabApp;
 
-        private const string PlotVelocityVectors = @"PlotVelocityVectors.m";
-        private const string MatLabCodeDirectory = @"MatLabCode";
+        private bool _running;
+        private int _counter;
+        private double _time;
 
         public Main()
         {
             InitializeComponent();
             InitializeSimulator();
-            InitializeMatLabApp();
         }
 
         private void InitializeSimulator()
         {
-            _simulator = new LatticeBoltzmannSimulator(
-                20, 5.5, 0.8, 0, 2.2, 201, 56, 1,
-                9.81, 0.00248, 0.5, 10);
+            _simulator = new LatticeBoltzmannSimulator();
 
             _simulator.PropertyChanged += SettingChanged;
 
-            var circle = new Circle(10, 5.5 / 2, 0.25);
-            _simulator.AddShape(circle);
+            _simulator.AddShape(new Rectangle(5.0,  4.5, 1, 1));
+            _simulator.AddShape(new Rectangle(5.0, 11.5, 1, 1));
+            _simulator.AddShape(new Rectangle(7.0,  4.5, 1, 1));
+            _simulator.AddShape(new Rectangle(7.0, 11.5, 1, 1));
+
+            // Top left, top right, bottom left, bottom right
+            var trapeziumPoints = new[,]
+            {
+                { 5.0, 5.0 },
+                { 7.0, 5.0 },
+                { 5.0, 4.0 },
+                { 7.0, 4.0 },
+            };
+            _simulator.AddShape(new Trapezium(trapeziumPoints));
+
+            trapeziumPoints = new[,]
+            {
+                { 5.0, 12.0 },
+                { 7.0, 12.0 },
+                { 5.0, 11.0 },
+                { 7.0, 11.0 },
+            };
+            _simulator.AddShape(new Trapezium(trapeziumPoints));
+
+            var bedPoints = new[,]
+            {
+                {  0.0, 0.4 },
+                {  5.0, 0.9 },
+                {  6.0, 0.9 },
+                { 16.0, 0.3 }
+            };
+            _simulator.SetBedShape(bedPoints);
 
             secSettingsEditor.SetDataSource(_simulator);
         }
 
-        private void InitializeMatLabApp()
+        private void btnRun_Click(object sender, EventArgs e)
         {
-            _matLabApp = new MLApp.MLApp();
-
-            var currentDirectory= Path.Combine(Directory.GetCurrentDirectory(), "..", "..");
-            var matLabCodeDirectory = Path.Combine(currentDirectory, MatLabCodeDirectory);
-            var path = Path.Combine(matLabCodeDirectory, PlotVelocityVectors);
-            
-            /*
-            object result = null;
-            _matLabApp.Execute(path);
-            _matLabApp.Feval("plot_velocity_vectors", 1, out result);
-
-            // Display result 
-            var matLabResults = result as object[];
-
-            MessageBox.Show(matLabResults[0].ToString());
-            MessageBox.Show(matLabResults[1].ToString());
-            //*/
+            CalculateValues();
         }
 
         private void SettingChanged(object sender, PropertyChangedEventArgs eventArgs)
         {
+            if (_running)
+            {
+                return;
+            }
+
             var value = GetSettingValue(eventArgs.PropertyName);
             tssStatus.Text = $@"{eventArgs.PropertyName} changed to {value}.";
             CalculateValues();
@@ -77,7 +91,34 @@ namespace LatticeBoltzmann.Views
 
         private void CalculateValues()
         {
-            _simulator.Calculate();
+            txtConsole.Clear();
+
+            btnRun.Enabled = false;
+            _running = true;
+
+            Application.DoEvents();
+
+            _simulator.ComputeEquilibriumDistributionFunction(setFEqToResult: true);
+
+            _simulator.MaxT = Convert.ToInt32(nudIterations.Value);
+
+            _counter = 0;
+            while (_counter < _simulator.MaxT)
+            {
+                _counter++;
+
+                _time = _counter * _simulator.Delta;
+
+                _simulator.ComputeEquilibriumDistributionFunction();
+                _simulator.ComputeNewValues();
+
+                txtConsole.Text += $@"Iteration {_counter:d4}: h[98, 51] = {_simulator.GetTrackedPointDepth()}{Environment.NewLine}";
+
+                Application.DoEvents();
+            }
+
+            _running = false;
+            btnRun.Enabled = true;
         }
     }
 }
