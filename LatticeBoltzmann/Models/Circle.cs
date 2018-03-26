@@ -4,17 +4,17 @@ namespace LatticeBoltzmann.Models
 {
     public class Circle: Shape
     {
-        private double _r { get; }
+        private readonly double _radius;
 
         public Circle(double x, double y, double r)
             : base(x, y)
         {
-            _r = r;
+            _radius = r;
         }
 
         public override bool IsSolid(double x, double y)
         {
-            return Math.Sqrt(Math.Pow(x - X, 2) + Math.Pow(y - Y / 2, 2)) <= _r;
+            return Math.Sqrt(Math.Pow(x - X, 2) + Math.Pow(y - Y / 2, 2)) <= _radius;
         }
     }
 }

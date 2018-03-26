@@ -80,10 +80,12 @@
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Interfaces\ISimulator.cs" />
+    <Compile Include="Models\Rectangle.cs" />
     <Compile Include="Models\Shape.cs" />
     <Compile Include="LatticeBoltzmannSimulator.cs" />
     <Compile Include="Models\Setting.cs" />
     <Compile Include="Models\Circle.cs" />
+    <Compile Include="Models\Trapezium.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\Annotations.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -130,20 +132,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <COMReference Include="MLApp">
-      <Guid>{C36E46AB-6A81-457B-9F91-A7719A06287F}</Guid>
-      <VersionMajor>1</VersionMajor>
-      <VersionMinor>0</VersionMinor>
-      <Lcid>0</Lcid>
-      <WrapperTool>tlbimp</WrapperTool>
-      <Isolated>False</Isolated>
-      <EmbedInteropTypes>True</EmbedInteropTypes>
-    </COMReference>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="MatLabCode\PlotVelocityVectors.m" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
