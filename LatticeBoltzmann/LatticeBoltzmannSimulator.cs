@@ -1,8 +1,8 @@
 ﻿using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Xml.Schema;
 using LatticeBoltzmann.Annotations;
 using LatticeBoltzmann.Helpers;
 using LatticeBoltzmann.Interfaces;
@@ -12,21 +12,22 @@ namespace LatticeBoltzmann
 {
     public class LatticeBoltzmannSimulator : ISimulator
     {
-        private const int XIndex = 0;
-        private const int YIndex = 1;
+        private const int X = 0;
+        private const int Y = 1;
+
+        private const int CENTRE = 0;
+        private const int RIGHT = 1;
+        private const int UP_RIGHT = 2;
+        private const int UP = 3;
+        private const int UP_LEFT = 4;
+        private const int LEFT = 5;
+        private const int DOWN_LEFT = 6;
+        private const int DOWN = 7;
+        private const int DOWN_RIGHT = 8;
 
         private const double ManningsCoefficient = 0.012;
-        private const double SolidValuesDefault = 2;
 
-        private const int ParticleGridBox0 = 0;
-        private const int ParticleGridBox1 = 1;
-        private const int ParticleGridBox2 = 2;
-        private const int ParticleGridBox3 = 3;
-        private const int ParticleGridBox4 = 4;
-        private const int ParticleGridBox5 = 5;
-        private const int ParticleGridBox6 = 6;
-        private const int ParticleGridBox7 = 7;
-        private const int ParticleGridBox8 = 8;
+        private readonly ICollection<Shape> _shapes;
 
         private double _accelerationDueToGravity;
         private double _length;
@@ -35,24 +36,26 @@ namespace LatticeBoltzmann
         private double _h0;
         private double _v0;
         private double _q0;
-        private double _maxT;
         private double _r;
         private double _d;
         private double _e;
 
-        private double[,] _solidValues;
+        private bool[,] _isSolid;
+        private double[,] _bedShape;
         private double[,] _bedData;
-        private double[][,] _bedSlopeData;
         private double[,] _h;
         private double[,] _u;
         private double[,] _v;
         private double[,] _particleVectors;
+        private double[][,] _bedSlopeData;
 
         private double[,,] _fEq;
         private double[,,] _fEqCurrent;
         private double[,,] _fTemp;
 
-        private readonly ICollection<Shape> _shapes;
+        private bool _initialised;
+
+        #region Accessors
 
         [Description("Acceleration due to Gravity")]
         public double AccelerationDueToGravity
@@ -79,7 +82,7 @@ namespace LatticeBoltzmann
         public double Delta
         {
             get { return _delta; }
-            set { SetPropertyField(nameof(Delta), ref _delta, value);}
+            set { SetPropertyField(nameof(Delta), ref _delta, value); }
         }
 
         [Description("Water Depth")]
@@ -101,12 +104,6 @@ namespace LatticeBoltzmann
             set { SetPropertyField(nameof(Q0), ref _q0, value); }
         }
 
-        public double MaxT
-        {
-            get { return _maxT; }
-            set { SetPropertyField(nameof(MaxT), ref _maxT, value); }
-        }
-
         [Description("Solid Radius")]
         public double R
         {
@@ -126,23 +123,25 @@ namespace LatticeBoltzmann
             set { SetPropertyField(nameof(E), ref _e, value); }
         }
 
+        #endregion Accessors
+
+        #region Properties
+
         // Calculated based on values above
         public int Lx => Convert.ToInt32(_length / _delta);
         public int Ly => Convert.ToInt32(_width / _delta);
-        
-        public double Fb => AccelerationDueToGravity / Math.Pow(Math.Pow(H0, 1.0/6.0) / ManningsCoefficient, 2);
-        public double U0 => Q0 / (H0 * Width);
+
+        public double Fb => AccelerationDueToGravity / Math.Pow(Math.Pow(H0, 1.0 / 6.0) / ManningsCoefficient, 2);
+        public double U0 => 0.8; //Q0 / (H0 * Width);
         public double Dt => Delta / E;
         public double Tau => 0.5 * (1 + 0.01 * 6 * Dt / (Delta * Delta));
         public double Nu => E * Delta * (2 * Tau - 1) / 6;
-        public double Xs => 1;
-        public double Xe => Lx;
-        public double Ys => 1;
-        public double Ye => Ly;
         public double Nermax => (Lx - 1) * (Ly - 1);
         public double Fr => U0 / Math.Sqrt(AccelerationDueToGravity * H0);
         public double Re => U0 * H0 / Nu;
         public double ReD => U0 * D / Nu;
+
+        #endregion Properties
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -150,61 +149,88 @@ namespace LatticeBoltzmann
         {
             Length = 20.0;
             Width = 16.0;
-            Delta = 0.1;
             H0 = 1.5;
             V0 = 0.0;
             Q0 = 2.2;
-            MaxT = 1;
             AccelerationDueToGravity = 9.81;
             //Fb = 0.00248;
-            R = 0.25;
+
             D = 0.5;
+            Delta = 0.1;
+            R = 0.25;
             E = 10;
 
             _shapes = new List<Shape>();
 
-            InitValues();
+            _initialised = false;
         }
 
         public LatticeBoltzmannSimulator(double length, double width,
-            double delta, double h0, double v0, double q0, double maxT, 
+            double delta, double h0, double v0, double q0,
             double accelerationDueToGravity, double r, double d, double e)
         {
             Length = length;
             Width = width;
-            Delta = delta;
             H0 = h0;
             V0 = v0;
             Q0 = q0;
-            MaxT = maxT;
             AccelerationDueToGravity = accelerationDueToGravity;
-            R = r;
             D = d;
+            Delta = delta;
+            R = r;
             E = e;
 
             _shapes = new List<Shape>();
 
-            InitValues();
+            _initialised = false;
         }
 
         public void AddShape(Shape shape)
         {
             _shapes.Add(shape);
+
+            _initialised = false;
         }
 
         public void RemoveShape(Shape shape)
         {
             _shapes.Remove(shape);
+
+            _initialised = false;
         }
 
         public void SetBedShape(double[,] points)
         {
-            _bedData = points;
+            _bedShape = points;
+
+            _initialised = false;
         }
 
-        public string GetTrackedPointDepth()
+        public bool[,] GetSolids()
         {
-            return _h[98, 51].ToString("F2");
+            return _isSolid;
+        }
+
+        public double[,] GetDepths()
+        {
+            return _h;
+        }
+
+        public double[,,] GetFunction()
+        {
+            return _fEq;
+        }
+
+        public string GetFunctionValueAtPoint(int x, int y)
+        {
+            double sumF = 0.0;
+            for (var a = 0; a < 9; a++)
+            {
+                sumF = _fEq[1, x, y] + _fEq[2, x, y] + _fEq[8, x, y];
+                sumF -= _fEq[4, x, y] + _fEq[5, x, y] + _fEq[6, x, y];
+            }
+
+            return sumF.ToString("F2");
         }
 
         [NotifyPropertyChangedInvocator]
@@ -220,24 +246,31 @@ namespace LatticeBoltzmann
             OnPropertyChanged(propertyName);
         }
 
-        private void InitValues()
+        #region Initialisation
+
+        public void Init()
         {
             InitSolidValues();
             InitBedData();
             InitBedSlopeData();
             InitDepthAndVelocityFields();
-            InitParticleVectors(E);
+            InitParticleVectors();
+
+            _fEqCurrent = DataHelper.GetNew3DArray(9, Lx, Ly, 0.0);
+            _fTemp = DataHelper.GetNew3DArray(9, Lx, Ly, 0.0);
+
+            _initialised = true;
         }
 
         private void InitSolidValues()
         {
-            _solidValues = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
+            _isSolid = DataHelper.GetNew2DArray(Lx, Ly, false);
 
             // Top and bottom boundary
             for (var x = 0; x < Lx; x++)
             {
-                _solidValues[x, 0] = 1.0;
-                _solidValues[x, Ly - 1] = 1.0;
+                _isSolid[x, 0] = false;
+                _isSolid[x, Ly - 1] = false;
             }
 
             // Shapes
@@ -247,10 +280,7 @@ namespace LatticeBoltzmann
                 {
                     for (var x = 0; x < Lx; x++)
                     {
-                        if (shape.IsSolid(x * Delta, y * Delta))
-                        {
-                            _solidValues[x, y] = SolidValuesDefault;
-                        }
+                        _isSolid[x, y] = _isSolid[x, y] || shape.IsSolid(x * Delta, y * Delta);
                     }
                 }
             }
@@ -260,13 +290,32 @@ namespace LatticeBoltzmann
         {
             _bedData = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
 
-            for (var p = 0; p < _bedData.Length % Lx - 1; p++)
+            if (_bedShape == null)
+            {
+                return;
+            }
+
+            // If the first part of the bed shape data doesn't touch the first bank, use 
+            // that value for the bed in between the bank and the start of the bed.
+            if (_bedShape[0, 0] / Delta > 0)
+            {
+                for (var y = 0; y < _bedShape[0, 0] / Delta; y++)
+                {
+                    for (var x = 0; x < Lx; x++)
+                    {
+                        _bedData[x, y] = _bedShape[0, 0] / Delta;
+                    }
+                }
+            }
+
+            var maxP = (_bedShape.Length / _bedShape.Rank) - 1;
+            for (var p = 0; p < maxP; p++)
             {
                 // Metres
-                var y1M = _bedData[p, 0];
-                var h1M = _bedData[p, 1];
-                var y2M = _bedData[p + 1, 0];
-                var h2M = _bedData[p + 1, 1];
+                var y1M = _bedShape[p, 0];
+                var h1M = _bedShape[p, 1];
+                var y2M = _bedShape[p + 1, 0];
+                var h2M = _bedShape[p + 1, 1];
 
                 // Array units
                 var y1 = Convert.ToInt32(y1M / Delta);
@@ -291,74 +340,112 @@ namespace LatticeBoltzmann
                     }
                 }
             }
+
+            // If the last part of the bed shape data doesn't touch the other bank, use 
+            // that value for the bed in between there and the bank.
+            var lastYPoint = Convert.ToInt32(_bedShape[maxP, 0] / Delta);
+            if (lastYPoint >= Ly)
+            {
+                return;
+            }
+
+            for (var y = lastYPoint + 1; y < Ly; y++)
+            {
+                for (var x = 0; x < Lx; x++)
+                {
+                    _bedData[x, y] = _bedShape[maxP, 0] / Delta;
+                }
+            }
         }
 
         private void InitBedSlopeData()
         {
             _bedSlopeData = new double[2][,];
-            _bedSlopeData[XIndex] = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
-            _bedSlopeData[YIndex] = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
+            _bedSlopeData[X] = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
+            _bedSlopeData[Y] = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
         }
 
         private void InitDepthAndVelocityFields()
         {
-            _h = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
-            _u = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
-            _v = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
+            _h = new double[Lx, Ly];
+            _u = new double[Lx, Ly];
+            _v = new double[Lx, Ly];
 
             for (var y = 0; y < Ly; y++)
             {
                 for (var x = 0; x < Lx; x++)
                 {
                     // Depth and velocity fields
-                    if (_solidValues[x, y] <= 1)
-                    {
-                        _h[x, y] = H0 - _bedData[x, y];
-                        _v[x, y] = 0;
-                        _u[x, y] = U0;
-                    }
-                    else
+                    if (_isSolid[x, y])
                     {
                         _h[x, y] = 0;
                         _u[x, y] = 0;
                         _v[x, y] = 0;
                     }
+                    else
+                    {
+                        _h[x, y] = H0 - _bedData[x, y];
+                        _v[x, y] = 0;
+                        _u[x, y] = U0;
+                    }
                 }
             }
         }
 
-        private void InitParticleVectors(double e)
+        private void InitParticleVectors()
         {
             _particleVectors = new double[2, 9];
 
-            _particleVectors[XIndex, ParticleGridBox0] = 0; _particleVectors[YIndex, ParticleGridBox0] = 0;
-            _particleVectors[XIndex, ParticleGridBox1] = e; _particleVectors[YIndex, ParticleGridBox1] = 0;
-            _particleVectors[XIndex, ParticleGridBox2] = e; _particleVectors[YIndex, ParticleGridBox2] = e;
-            _particleVectors[XIndex, ParticleGridBox3] = 0; _particleVectors[YIndex, ParticleGridBox3] = e;
-            _particleVectors[XIndex, ParticleGridBox4] = -e; _particleVectors[YIndex, ParticleGridBox4] = e;
-            _particleVectors[XIndex, ParticleGridBox5] = -e; _particleVectors[YIndex, ParticleGridBox5] = 0;
-            _particleVectors[XIndex, ParticleGridBox6] = -e; _particleVectors[YIndex, ParticleGridBox6] = -e;
-            _particleVectors[XIndex, ParticleGridBox7] = 0; _particleVectors[YIndex, ParticleGridBox7] = -e;
-            _particleVectors[XIndex, ParticleGridBox8] = e; _particleVectors[YIndex, ParticleGridBox8] = -e;
+            _particleVectors[X, CENTRE] = 0;
+            _particleVectors[Y, CENTRE] = 0;
+
+            _particleVectors[X, RIGHT] = E;
+            _particleVectors[Y, RIGHT] = 0;
+
+            _particleVectors[X, UP_RIGHT] = E;
+            _particleVectors[Y, UP_RIGHT] = E;
+
+            _particleVectors[X, UP] = 0;
+            _particleVectors[Y, UP] = E;
+
+            _particleVectors[X, UP_LEFT] = -E;
+            _particleVectors[Y, UP_LEFT] = E;
+
+            _particleVectors[X, LEFT] = -E;
+            _particleVectors[Y, LEFT] = 0;
+
+            _particleVectors[X, DOWN_LEFT] = -E;
+            _particleVectors[Y, DOWN_LEFT] = -E;
+
+            _particleVectors[X, DOWN] = 0;
+            _particleVectors[Y, DOWN] = -E;
+
+            _particleVectors[X, DOWN_RIGHT] = E;
+            _particleVectors[Y, DOWN_RIGHT] = -E;
         }
+
+        #endregion Initialisation
 
         public void ComputeEquilibriumDistributionFunction(bool setFEqToResult = false)
         {
-            _fEqCurrent = DataHelper.GetNew3DArray(9, Lx, Ly, 0.0);
+            if (!_initialised)
+            {
+                throw new InvalidOperationException("You must initialise the simulator before computing the equilibrium function.");
+            }
 
             for (var y = 0; y < Ly; y++)
             {
                 for (var x = 0; x < Lx; x++)
                 {
-                    if (!(_solidValues[x, y] <= 1.0))
+                    if (_isSolid[x, y])
                     {
+                        for (var a = 0; a < 9; a++)
+                        {
+                            _fEqCurrent[a, x, y] = 0;
+                        }
+
                         continue;
                     }
-
-                    _fEqCurrent[0, x, y] = _h[x, y] -
-                                           5 * AccelerationDueToGravity * Math.Pow(_h[x, y], 2) / (6 * Math.Pow(E, 2)) -
-                                           2 * _h[x, y] / (3 * Math.Pow(E, 2)) *
-                                           (Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2));
 
                     for (var a = 1; a < 9; a++)
                     {
@@ -367,13 +454,13 @@ namespace LatticeBoltzmann
                             _fEqCurrent[a, x, y] =
                                 AccelerationDueToGravity * Math.Pow(_h[x, y], 2) / (24 * Math.Pow(E, 2)) +
                                 _h[x, y] / (12 * Math.Pow(E, 2)) *
-                                (_particleVectors[XIndex, a] * _u[x, y] + _particleVectors[YIndex, a] * _v[x, y]) +
+                                (_particleVectors[X, a] * _u[x, y] + _particleVectors[Y, a] * _v[x, y]) +
                                 _h[x, y] / (8 * Math.Pow(E, 4)) *
                                 (
-                                    _particleVectors[XIndex, a] * _u[x, y] * _particleVectors[XIndex, a] * _u[x, y] +
-                                    2 * _particleVectors[XIndex, a] * _u[x, y] * _particleVectors[YIndex, a] *
+                                    _particleVectors[X, a] * _u[x, y] * _particleVectors[X, a] * _u[x, y] +
+                                    2 * _particleVectors[X, a] * _u[x, y] * _particleVectors[Y, a] *
                                     _v[x, y] +
-                                    _particleVectors[YIndex, a] * _v[x, y] * _particleVectors[YIndex, a] * _v[x, y]
+                                    _particleVectors[Y, a] * _v[x, y] * _particleVectors[Y, a] * _v[x, y]
                                 ) - _h[x, y] / (24 * Math.Pow(E, 2)) * (Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2));
                         }
                         else
@@ -381,16 +468,21 @@ namespace LatticeBoltzmann
                             _fEqCurrent[a, x, y] =
                                 AccelerationDueToGravity * Math.Pow(_h[x, y], 2) / (6 * Math.Pow(E, 2)) +
                                 _h[x, y] / (3 * Math.Pow(E, 2)) *
-                                (_particleVectors[XIndex, a] * _u[x, y] + _particleVectors[YIndex, a] * _v[x, y]) +
+                                (_particleVectors[X, a] * _u[x, y] + _particleVectors[Y, a] * _v[x, y]) +
                                 _h[x, y] / (2 * Math.Pow(E, 4)) *
                                 (
-                                    _particleVectors[XIndex, a] * _u[x, y] * _particleVectors[XIndex, a] * _u[x, y] +
-                                    2 * _particleVectors[XIndex, a] * _u[x, y] * _particleVectors[YIndex, a] *
+                                    _particleVectors[X, a] * _u[x, y] * _particleVectors[X, a] * _u[x, y] +
+                                    2 * _particleVectors[X, a] * _u[x, y] * _particleVectors[Y, a] *
                                     _v[x, y] +
-                                    _particleVectors[YIndex, a] * _v[x, y] * _particleVectors[YIndex, a] * _v[x, y]
+                                    _particleVectors[Y, a] * _v[x, y] * _particleVectors[Y, a] * _v[x, y]
                                 ) - _h[x, y] / (6 * Math.Pow(E, 2)) * (Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2));
                         }
                     }
+
+                    _fEqCurrent[CENTRE, x, y] = _h[x, y] -
+                                           5 * AccelerationDueToGravity * Math.Pow(_h[x, y], 2) / (6 * Math.Pow(E, 2)) -
+                                           2 * _h[x, y] / (3 * Math.Pow(E, 2)) *
+                                           (Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2));
                 }
             }
 
@@ -412,72 +504,121 @@ namespace LatticeBoltzmann
 
         private void CollideStream()
         {
-            if (_fTemp == null)
-            {
-                _fTemp = DataHelper.GetNew3DArray(9, Lx, Ly, 0.0);
-            }
-
-            for (var y = 0; y < Ly; y++)
+            for (var y = 1; y < Ly - 1; y++)
             {
                 var yp = y + 1;
                 var yn = y - 1;
 
-                for (var x = 0; x < Lx; x++)
+                for (var x = 1; x < Lx - 1; x++)
                 {
-                    if (_solidValues[x, y] <= 1)
-                    {
-                        var xp = x + 1;
-                        var xn = x - 1;
-
-                        if (xp < Lx && _solidValues[xp, y] <= 1)
-                        {
-                            _fTemp[0, xp, y] = _fEq[0, x, y] - (_fEq[0, x, y] - _fEqCurrent[0, x, y]) / Tau - Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[xp, y]) * (_particleVectors[XIndex, 0] * _bedSlopeData[XIndex][x, y] + _particleVectors[YIndex, 0] * _bedSlopeData[YIndex][x, y]) - Dt / (6 * E * E) * Fb * Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) * (_particleVectors[XIndex, 0] * _u[x, y] + _particleVectors[YIndex, 0] * _v[x, y]);
-                        }
-
-                        if (xp < Lx && yp < Ly && _solidValues[xp, yp] <= 1)
-                        {
-                            _fTemp[1, xp, yp] = _fEq[1, x, y] - (_fEq[1, x, y] - _fEqCurrent[1, x, y]) / Tau - Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[xp, yp]) * (_particleVectors[XIndex, 1] * _bedSlopeData[XIndex][x, y] + _particleVectors[YIndex, 1] * _bedSlopeData[YIndex][x, y]) - Dt / (6 * E * E) * Fb * Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) * (_particleVectors[XIndex, 1] * _u[x, y] + _particleVectors[YIndex, 1] * _v[x, y]);
-                        }
-
-                        if (yp < Ly && _solidValues[x, yp] <= 1)
-                        {
-                            _fTemp[2, x, yp] = _fEq[2, x, y] - (_fEq[2, x, y] - _fEqCurrent[2, x, y]) / Tau - Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[x, yp]) * (_particleVectors[XIndex, 2] * _bedSlopeData[XIndex][x, y] + _particleVectors[YIndex, 2] * _bedSlopeData[YIndex][x, y]) - Dt / (6 * E * E) * Fb * Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) * (_particleVectors[XIndex, 2] * _u[x, y] + _particleVectors[YIndex, 2] * _v[x, y]);
-                        }
-
-                        if (xn >= 0 && yp < Ly && _solidValues[xn, yp] <= 1)
-                        {
-                            _fTemp[3, xn, yp] = _fEq[3, x, y] - (_fEq[3, x, y] - _fEqCurrent[3, x, y]) / Tau - Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[xn, yp]) * (_particleVectors[XIndex, 3] * _bedSlopeData[XIndex][xn, y] + _particleVectors[YIndex, 3] * _bedSlopeData[YIndex][x, y]) - Dt / (6 * E * E) * Fb * Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) * (_particleVectors[XIndex, 3] * _u[x, y] + _particleVectors[YIndex, 3] * _v[x, y]);
-                        }
-
-                        if (xn >= 0 && _solidValues[xn, y] <= 1)
-                        {
-                            _fTemp[4, xn, y] = _fEq[4, x, y] - (_fEq[4, x, y] - _fEqCurrent[4, x, y]) / Tau - Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[xn, y]) * (_particleVectors[XIndex, 4] * _bedSlopeData[XIndex][xn, y] + _particleVectors[YIndex, 4] * _bedSlopeData[YIndex][x, y]) - Dt / (6 * E * E) * Fb * Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) * (_particleVectors[XIndex, 4] * _u[x, y] + _particleVectors[YIndex, 4] * _v[x, y]);
-                        }
-
-                        if (xn >= 0 && yn >= 0 && _solidValues[xn, yn] <= 1)
-                        {
-                            _fTemp[5, xn, yn] = _fEq[5, x, y] - (_fEq[5, x, y] - _fEqCurrent[5, x, y]) / Tau - Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[xn, yn]) * (_particleVectors[XIndex, 5] * _bedSlopeData[XIndex][xn, y] + _particleVectors[YIndex, 5] * _bedSlopeData[YIndex][x, yn]) - Dt / (6 * E * E) * Fb * Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) * (_particleVectors[XIndex, 5] * _u[x, y] + _particleVectors[YIndex, 5] * _v[x, y]);
-                        }
-
-                        if (yn >= 0 && _solidValues[x, yn] <= 1)
-                        {
-                            _fTemp[6, x, yn] = _fEq[6, x, y] - (_fEq[6, x, y] - _fEqCurrent[6, x, y]) / Tau - Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[x, yn]) * (_particleVectors[XIndex, 6] * _bedSlopeData[XIndex][x, y] + _particleVectors[YIndex, 6] * _bedSlopeData[YIndex][x, yn]) - Dt / (6 * E * E) * Fb * Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) * (_particleVectors[XIndex, 6] * _u[x, y] + _particleVectors[YIndex, 6] * _v[x, y]);
-                        }
-
-                        if (xp < Lx && yn >= 0 && _solidValues[xp, yn] <= 1)
-                        {
-                            _fTemp[7, xp, yn] = _fEq[7, x, y] - (_fEq[7, x, y] - _fEqCurrent[7, x, y]) / Tau - Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[xp, yn]) * (_particleVectors[XIndex, 7] * _bedSlopeData[XIndex][x, y] + _particleVectors[YIndex, 7] * _bedSlopeData[YIndex][x, yn]) - Dt / (6 * E * E) * Fb * Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) * (_particleVectors[XIndex, 7] * _u[x, y] + _particleVectors[YIndex, 7] * _v[x, y]);
-                        }
-
-                        _fTemp[8, x, y] = _fEq[8, x, y] - (_fEq[8, x, y] - _fEqCurrent[8, x, y]) / Tau;
-                    }
-                    else
+                    if (_isSolid[x, y])
                     {
                         for (var a = 0; a < 9; a++)
                         {
                             _fTemp[a, x, y] = 0;
                         }
+                        continue;
                     }
+
+                    var xp = x + 1;
+                    var xn = x - 1;
+
+                    if (xp <= Lx && !_isSolid[xp, y])
+                    {
+                        _fTemp[RIGHT, xp, y] = _fEq[RIGHT, x, y] - (_fEq[RIGHT, x, y] - _fEqCurrent[RIGHT, x, y]) / Tau -
+                                               Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 *
+                                               (_h[x, y] + _h[xp, y]) *
+                                               (_particleVectors[X, RIGHT] * _bedSlopeData[X][x, y] +
+                                                _particleVectors[Y, RIGHT] * _bedSlopeData[Y][x, y]) -
+                                               Dt / (6 * E * E) * Fb *
+                                               Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) *
+                                               (_particleVectors[X, RIGHT] * _u[x, y] +
+                                                _particleVectors[Y, RIGHT] * _v[x, y]);
+                    }
+
+                    if (xp < Lx && yp < Ly && !_isSolid[xp, yp])
+                    {
+                        _fTemp[UP_RIGHT, xp, yp] = _fEq[UP_RIGHT, x, y] - (_fEq[UP_RIGHT, x, y] - _fEqCurrent[UP_RIGHT, x, y]) / Tau -
+                                                   Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 *
+                                                   (_h[x, y] + _h[xp, yp]) *
+                                                   (_particleVectors[X, UP_RIGHT] * _bedSlopeData[X][x, y] +
+                                                    _particleVectors[Y, UP_RIGHT] * _bedSlopeData[Y][x, y]) -
+                                                   Dt / (6 * E * E) * Fb *
+                                                   Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) *
+                                                   (_particleVectors[X, UP_RIGHT] * _u[x, y] +
+                                                    _particleVectors[Y, UP_RIGHT] * _v[x, y]);
+                    }
+
+                    if (yp < Ly && !_isSolid[x, yp])
+                    {
+                        _fTemp[UP, x, yp] = _fEq[UP, x, y] - (_fEq[UP, x, y] - _fEqCurrent[UP, x, y]) / Tau -
+                                           Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[x, yp]) *
+                                           (_particleVectors[X, UP] * _bedSlopeData[X][x, y] +
+                                            _particleVectors[Y, UP] * _bedSlopeData[Y][x, y]) - Dt / (6 * E * E) * Fb *
+                                           Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) *
+                                           (_particleVectors[X, UP] * _u[x, y] + 
+                                            _particleVectors[Y, UP] * _v[x, y]);
+                    }
+
+                    if (xn >= 0 && yp < Ly && !_isSolid[xn, yp])
+                    {
+                        _fTemp[UP_LEFT, xn, yp] = _fEq[UP_LEFT, x, y] - (_fEq[UP_LEFT, x, y] - _fEqCurrent[UP_LEFT, x, y]) / Tau -
+                                            Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 *
+                                            (_h[x, y] + _h[xn, yp]) *
+                                            (_particleVectors[X, UP_LEFT] * _bedSlopeData[X][xn, y] +
+                                             _particleVectors[Y, UP_LEFT] * _bedSlopeData[Y][x, y]) - Dt / (6 * E * E) * Fb *
+                                            Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) *
+                                            (_particleVectors[X, UP_LEFT] * _u[x, y] +
+                                             _particleVectors[Y, UP_LEFT] * _v[x, y]);
+                    }
+
+                    if (xn >= 0 && !_isSolid[xn, y])
+                    {
+                        _fTemp[LEFT, xn, y] = _fEq[LEFT, x, y] - (_fEq[LEFT, x, y] - _fEqCurrent[LEFT, x, y]) / Tau -
+                                           Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[xn, y]) *
+                                           (_particleVectors[X, LEFT] * _bedSlopeData[X][xn, y] +
+                                            _particleVectors[Y, LEFT] * _bedSlopeData[Y][x, y]) - Dt / (6 * E * E) * Fb *
+                                           Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) *
+                                           (_particleVectors[X, LEFT] * _u[x, y] + 
+                                            _particleVectors[Y, LEFT] * _v[x, y]);
+                    }
+
+                    if (xn >= 0 && yn >= 0 && !_isSolid[xn, yn])
+                    {
+                        _fTemp[DOWN_LEFT, xn, yn] = _fEq[DOWN_LEFT, x, y] - (_fEq[DOWN_LEFT, x, y] - _fEqCurrent[DOWN_LEFT, x, y]) / Tau -
+                                            Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 *
+                                            (_h[x, y] + _h[xn, yn]) *
+                                            (_particleVectors[X, DOWN_LEFT] * _bedSlopeData[X][xn, y] +
+                                             _particleVectors[Y, DOWN_LEFT] * _bedSlopeData[Y][x, yn]) - Dt / (6 * E * E) * Fb *
+                                            Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) *
+                                            (_particleVectors[X, DOWN_LEFT] * _u[x, y] + 
+                                             _particleVectors[Y, DOWN_LEFT] * _v[x, y]);
+                    }
+
+                    if (yn >= 0 && !_isSolid[x, yn])
+                    {
+                        _fTemp[DOWN, x, yn] = _fEq[DOWN, x, y] - (_fEq[DOWN, x, y] - _fEqCurrent[DOWN, x, y]) / Tau -
+                                           Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 * (_h[x, y] + _h[x, yn]) *
+                                           (_particleVectors[X, DOWN] * _bedSlopeData[X][x, y] +
+                                            _particleVectors[Y, DOWN] * _bedSlopeData[Y][x, yn]) - Dt / (6 * E * E) * Fb *
+                                           Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) *
+                                           (_particleVectors[X, DOWN] * _u[x, y] + 
+                                            _particleVectors[Y, DOWN] * _v[x, y]);
+                    }
+
+                    if (xp < Lx && yn >= 0 && !_isSolid[xp, yn])
+                    {
+                        _fTemp[DOWN_RIGHT, xp, yn] = _fEq[DOWN_RIGHT, x, y] - (_fEq[DOWN_RIGHT, x, y] - _fEqCurrent[DOWN_RIGHT, x, y]) / Tau -
+                                            Dt / (6 * E * E) * AccelerationDueToGravity * 0.5 *
+                                            (_h[x, y] + _h[xp, yn]) *
+                                            (_particleVectors[X, DOWN_RIGHT] * _bedSlopeData[X][x, y] +
+                                             _particleVectors[Y, DOWN_RIGHT] * _bedSlopeData[Y][x, yn]) - Dt / (6 * E * E) * Fb *
+                                            Math.Sqrt(Math.Pow(_u[x, y], 2) + Math.Pow(_v[x, y], 2)) *
+                                            (_particleVectors[X, DOWN_RIGHT] * _u[x, y] +
+                                             _particleVectors[Y, DOWN_RIGHT] * _v[x, y]);
+                    }
+
+                    _fTemp[CENTRE, x, y] = _fEq[CENTRE, x, y] - (_fEq[CENTRE, x, y] - _fEqCurrent[CENTRE, x, y]) / Tau;
                 }
             }
         }
@@ -489,13 +630,13 @@ namespace LatticeBoltzmann
         {
             for (var x = 0; x < Lx; x++)
             {
-                _fTemp[2, x, 0] = _fTemp[8, x, 0];
-                _fTemp[3, x, 0] = _fTemp[7, x, 0];
-                _fTemp[4, x, 0] = _fTemp[6, x, 0];
+                _fTemp[UP_RIGHT, x, 0] = _fTemp[DOWN_RIGHT, x, 0];
+                _fTemp[UP, x, 0] =       _fTemp[DOWN, x, 0];
+                _fTemp[UP_LEFT, x, 0] =  _fTemp[DOWN_LEFT, x, 0];
 
-                _fTemp[8, x, Ly - 1] = _fTemp[2, x, Ly - 1];
-                _fTemp[7, x, Ly - 1] = _fTemp[3, x, Ly - 1];
-                _fTemp[6, x, Ly - 1] = _fTemp[4, x, Ly - 1];
+                _fTemp[DOWN_RIGHT, x, Ly - 1] = _fTemp[UP_RIGHT, x, Ly - 1];
+                _fTemp[DOWN, x, Ly - 1] =       _fTemp[UP, x, Ly - 1];
+                _fTemp[DOWN_LEFT, x, Ly - 1] =  _fTemp[UP_LEFT, x, Ly - 1];
             }
         }
 
@@ -509,23 +650,34 @@ namespace LatticeBoltzmann
             var dy = new[] { 0, 1, 1, 1, 0, -1, -1, -1 };
 
             // Map sources/destinations
-            var src = new[] { 0, 1, 2, 3, 4, 5, 6, 7 };
-            var dst = new[] { 4, 5, 6, 7, 0, 1, 2, 3 };
+            const int src = 0;
+            const int dst = 1;
+            var map = new[,]
+            {
+                { RIGHT,        LEFT },
+                { UP_RIGHT,     DOWN_LEFT },
+                { UP,           DOWN },
+                { UP_LEFT,      DOWN_RIGHT },
+                { LEFT,         RIGHT },
+                { DOWN_LEFT,    UP_RIGHT },
+                { DOWN,         UP },
+                { DOWN_RIGHT,   UP_LEFT }
+            };
 
             for (var y = 1; y < Ly - 1; y++)
             {
                 for (var x = 1; x < Lx - 1; x++)
                 {
-                    if (!_solidValues[x, y].Equals(0))
+                    if (_isSolid[x, y])
                     {
                         continue;
                     }
 
                     for (var d = 0; d < 8; d++)
                     {
-                        if (_solidValues[x + dx[d], y + dy[d]].Equals(2))
+                        if (_isSolid[x + dx[d], y + dy[d]])
                         {
-                            _fTemp[dst[d], x, y] = _fTemp[src[d], x, y];
+                            _fTemp[map[d, dst], x, y] = _fTemp[map[d, src], x, y];
                         }
                     }
                 }
@@ -541,7 +693,7 @@ namespace LatticeBoltzmann
             {
                 for (var a = 0; a < 9; a++)
                 {
-                    _fTemp[a, 0, y] = _fTemp[a, 1, y];
+                    _fTemp[a, 0, y] =      _fTemp[a, 1, y];
                     _fTemp[a, Lx - 1, y] = _fTemp[a, Lx - 2, y];
                 }
             }
@@ -552,34 +704,38 @@ namespace LatticeBoltzmann
         /// </summary>
         private void Solution()
         {
-            Array.Copy(_fTemp, _fEq, Lx * Ly);
+            _fEq = _fTemp.Clone() as double[,,];
+
+            if (_fEq == null)
+            {
+                throw new InvalidOperationException("The equilibrium distribution is null. That shouldn't happen; please inform the developer.");
+            }
 
             var h = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
-            var sumU = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
-            var sumV = DataHelper.GetNew2DArray(Lx, Ly, 0.0);
 
             for (var y = 0; y < Ly; y++)
             {
                 for (var x = 0; x < Lx; x++)
                 {
-                    if (_solidValues[x, y] <= 1)
-                    {
-                        for (var a = 0; a < 9; a++)
-                        {
-                            h[x, y] = h[x, y] + _fEq[a, x, y];
-                            sumU[x, y] = sumU[x, y] + _particleVectors[XIndex, a] * _fEq[a, x, y];
-                            sumV[x, y] = sumV[x, y] + _particleVectors[YIndex, a] * _fEq[a, x, y];
-                        }
-
-                        _u[x, y] = sumU[x, y] / _h[x, y];
-                        _v[x, y] = sumV[x, y] / _h[x, y];
-                    }
-                    else if (_solidValues[x, y].Equals(2))
+                    if (_isSolid[x, y])
                     {
                         _h[x, y] = 0;
                         _u[x, y] = 0;
                         _v[x, y] = 0;
+
+                        continue;
                     }
+
+                    double sumU = 0, sumV = 0;
+                    for (var a = 0; a < 9; a++)
+                    {
+                        h[x, y] += _fEq[a, x, y];
+                        sumU += _particleVectors[X, a] * _fEq[a, x, y];
+                        sumV += _particleVectors[Y, a] * _fEq[a, x, y];
+                    }
+
+                    _u[x, y] = sumU / _h[x, y];
+                    _v[x, y] = sumV / _h[x, y];
                 }
             }
         }
@@ -592,7 +748,7 @@ namespace LatticeBoltzmann
             // Outflow
             for (var y = 0; y < Ly; y++)
             {
-                _h[Lx - 1, y] = _h0;
+                _h[Lx - 1, y] = _h[Lx - 2, y] - 0.01;
                 _u[Lx - 1, y] = _u[Lx - 2, y];
                 _v[Lx - 1, y] = 0;
             }
@@ -604,17 +760,16 @@ namespace LatticeBoltzmann
                 _v[0, y] = 0;
             }
 
-            var qi = 0.0;
-            var area = 0.0;
+            double qi = 0, area = 0;
             for (var y = 0; y < Ly - 2; y++)
             {
-                qi = qi + 0.5 * (_h[0, y] + _h[0, y + 1]) * Delta * 0.5 * (_u[0, y] + _u[0, y + 1]);
-                area = area + 0.5 * (_h[0, y] + _h[0, y + 1]) * Delta;
+                qi += 0.5 * (_h[0, y] + _h[0, y + 1]) * Delta * 0.5 * (_u[0, y] + _u[0, y + 1]);
+                area += 0.5 * (_h[0, y] + _h[0, y + 1]) * Delta;
             }
 
             for (var y = 0; y < Ly; y++)
             {
-                _u[0, y] = _u[0, y] + (Q0 - qi) / area;
+                _u[0, y] += (Q0 - qi) / area;
             }
 
             // Wall

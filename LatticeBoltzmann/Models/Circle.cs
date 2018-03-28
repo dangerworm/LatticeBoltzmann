@@ -14,7 +14,7 @@ namespace LatticeBoltzmann.Models
 
         public override bool IsSolid(double x, double y)
         {
-            return Math.Sqrt(Math.Pow(x - X, 2) + Math.Pow(y - Y / 2, 2)) <= _radius;
+            return Math.Sqrt(Math.Pow(x - X, 2) + Math.Pow(y - Y, 2)) <= _radius;
         }
     }
 }
