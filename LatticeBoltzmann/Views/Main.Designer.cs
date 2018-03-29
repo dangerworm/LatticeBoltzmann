@@ -33,13 +33,12 @@
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.tssStatus = new System.Windows.Forms.ToolStripStatusLabel();
             this.btnRun = new System.Windows.Forms.Button();
-            this.label1 = new System.Windows.Forms.Label();
-            this.nudIterations = new System.Windows.Forms.NumericUpDown();
             this.txtConsole = new System.Windows.Forms.TextBox();
             this.pbxSolids = new System.Windows.Forms.PictureBox();
+            this.btnPause = new System.Windows.Forms.Button();
+            this.btnReset = new System.Windows.Forms.Button();
             this.gbxSettings.SuspendLayout();
             this.statusStrip1.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.nudIterations)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pbxSolids)).BeginInit();
             this.SuspendLayout();
             // 
@@ -64,9 +63,9 @@
             // 
             this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tssStatus});
-            this.statusStrip1.Location = new System.Drawing.Point(0, 419);
+            this.statusStrip1.Location = new System.Drawing.Point(0, 346);
             this.statusStrip1.Name = "statusStrip1";
-            this.statusStrip1.Size = new System.Drawing.Size(786, 22);
+            this.statusStrip1.Size = new System.Drawing.Size(945, 22);
             this.statusStrip1.TabIndex = 2;
             this.statusStrip1.Text = "statusStrip1";
             // 
@@ -77,66 +76,60 @@
             // 
             // btnRun
             // 
-            this.btnRun.Location = new System.Drawing.Point(547, 30);
+            this.btnRun.Location = new System.Drawing.Point(12, 247);
             this.btnRun.Name = "btnRun";
-            this.btnRun.Size = new System.Drawing.Size(75, 23);
+            this.btnRun.Size = new System.Drawing.Size(87, 23);
             this.btnRun.TabIndex = 3;
             this.btnRun.Text = "Run";
             this.btnRun.UseVisualStyleBackColor = true;
             this.btnRun.Click += new System.EventHandler(this.btnRun_Click);
             // 
-            // label1
-            // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(307, 34);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(108, 13);
-            this.label1.TabIndex = 5;
-            this.label1.Text = "How many iterations?";
-            // 
-            // nudIterations
-            // 
-            this.nudIterations.Location = new System.Drawing.Point(421, 32);
-            this.nudIterations.Maximum = new decimal(new int[] {
-            10000,
-            0,
-            0,
-            0});
-            this.nudIterations.Name = "nudIterations";
-            this.nudIterations.Size = new System.Drawing.Size(120, 20);
-            this.nudIterations.TabIndex = 6;
-            this.nudIterations.Value = new decimal(new int[] {
-            1000,
-            0,
-            0,
-            0});
-            // 
             // txtConsole
             // 
-            this.txtConsole.Location = new System.Drawing.Point(310, 88);
+            this.txtConsole.Location = new System.Drawing.Point(704, 12);
             this.txtConsole.Multiline = true;
             this.txtConsole.Name = "txtConsole";
             this.txtConsole.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.txtConsole.Size = new System.Drawing.Size(462, 319);
+            this.txtConsole.Size = new System.Drawing.Size(229, 319);
             this.txtConsole.TabIndex = 7;
             // 
             // pbxSolids
             // 
-            this.pbxSolids.Location = new System.Drawing.Point(18, 247);
+            this.pbxSolids.Location = new System.Drawing.Point(298, 12);
             this.pbxSolids.Name = "pbxSolids";
-            this.pbxSolids.Size = new System.Drawing.Size(274, 160);
+            this.pbxSolids.Size = new System.Drawing.Size(400, 320);
             this.pbxSolids.TabIndex = 8;
             this.pbxSolids.TabStop = false;
+            // 
+            // btnPause
+            // 
+            this.btnPause.Location = new System.Drawing.Point(110, 247);
+            this.btnPause.Name = "btnPause";
+            this.btnPause.Size = new System.Drawing.Size(87, 23);
+            this.btnPause.TabIndex = 10;
+            this.btnPause.Text = "Pause";
+            this.btnPause.UseVisualStyleBackColor = true;
+            this.btnPause.Click += new System.EventHandler(this.btnPause_Click);
+            // 
+            // btnReset
+            // 
+            this.btnReset.Location = new System.Drawing.Point(205, 247);
+            this.btnReset.Name = "btnReset";
+            this.btnReset.Size = new System.Drawing.Size(87, 23);
+            this.btnReset.TabIndex = 11;
+            this.btnReset.Text = "Reset";
+            this.btnReset.UseVisualStyleBackColor = true;
+            this.btnReset.Click += new System.EventHandler(this.btnReset_Click);
             // 
             // Main
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(786, 441);
+            this.ClientSize = new System.Drawing.Size(945, 368);
+            this.Controls.Add(this.btnReset);
+            this.Controls.Add(this.btnPause);
             this.Controls.Add(this.pbxSolids);
             this.Controls.Add(this.txtConsole);
-            this.Controls.Add(this.nudIterations);
-            this.Controls.Add(this.label1);
             this.Controls.Add(this.btnRun);
             this.Controls.Add(this.statusStrip1);
             this.Controls.Add(this.gbxSettings);
@@ -145,7 +138,6 @@
             this.gbxSettings.ResumeLayout(false);
             this.statusStrip1.ResumeLayout(false);
             this.statusStrip1.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.nudIterations)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.pbxSolids)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -159,9 +151,9 @@
         private System.Windows.Forms.StatusStrip statusStrip1;
         private System.Windows.Forms.ToolStripStatusLabel tssStatus;
         private System.Windows.Forms.Button btnRun;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.NumericUpDown nudIterations;
         private System.Windows.Forms.TextBox txtConsole;
         private System.Windows.Forms.PictureBox pbxSolids;
+        private System.Windows.Forms.Button btnPause;
+        private System.Windows.Forms.Button btnReset;
     }
 }

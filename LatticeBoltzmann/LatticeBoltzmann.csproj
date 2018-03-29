@@ -47,6 +47,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BedPointManager.cs" />
     <Compile Include="Controls\SettingsEditorControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -80,6 +81,7 @@
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Interfaces\ISimulator.cs" />
+    <Compile Include="Models\Particle.cs" />
     <Compile Include="Models\Rectangle.cs" />
     <Compile Include="Models\Shape.cs" />
     <Compile Include="LatticeBoltzmannSimulator.cs" />
@@ -89,6 +91,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\Annotations.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ShapeManager.cs" />
     <Compile Include="Views\Main.cs">
       <SubType>Form</SubType>
     </Compile>

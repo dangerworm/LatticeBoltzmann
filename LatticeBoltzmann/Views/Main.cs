@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 using LatticeBoltzmann.Models;
@@ -16,17 +18,24 @@ namespace LatticeBoltzmann.Views
 
         private bool _running;
         private int _counter;
-        private double _maxT;
         private double _time;
+        private Collection<Particle> _particles;
 
         public Main()
         {
             InitializeComponent();
             InitializeSimulator();
 
+            secSettingsEditor.SetDataSource(_simulator);
+
             _solidsImage = new Bitmap(pbxSolids.Width, pbxSolids.Height);
             _solidsGraphics = Graphics.FromImage(_solidsImage);
-            DrawSolids();
+            _particles = new Collection<Particle>();
+
+            for (int x = 0; x < 52; x++)
+            {
+                _particles.Add(new Particle(25, 6 * x, Color.LightBlue));
+            };
         }
 
         private void InitializeSimulator()
@@ -34,85 +43,37 @@ namespace LatticeBoltzmann.Views
             _simulator = new LatticeBoltzmannSimulator();
             _simulator.PropertyChanged += SettingChanged;
 
-            AddSolids();
-
-            var bedPoints = new[,]
+            foreach (var shape in ShapeManager.GetColumns(_simulator.Resolution))
             {
-                {  0.0, 0.4 },
-                {  5.0, 0.9 },
-                {  6.0, 0.9 },
-                { 16.0, 0.3 }
-            };
-            _simulator.SetBedShape(bedPoints);
+                _simulator.AddShape(shape);
+            }
+            _simulator.SetBedShape(BedPointManager.GetBedPoints());
+        }
 
+        private void RunSimulation()
+        {
             _simulator.Init();
 
-            secSettingsEditor.SetDataSource(_simulator);
-        }
-
-        private void AddSolids()
-        {
-            /*
-            _simulator.AddShape(new Rectangle(5.0, 4.5, 1, 1));
-            _simulator.AddShape(new Rectangle(5.0, 11.5, 1, 1));
-            _simulator.AddShape(new Rectangle(7.0, 4.5, 1, 1));
-            _simulator.AddShape(new Rectangle(7.0, 11.5, 1, 1));
-
-            // Top left, top right, bottom left, bottom right
-            var trapeziumPoints = new[,]
-            {
-                { 5.0, 5.0 },
-                { 7.0, 5.0 },
-                { 7.0, 4.0 },
-                { 5.0, 4.0 }
-            };
-            _simulator.AddShape(new Trapezium(trapeziumPoints));
-
-            trapeziumPoints = new[,]
-            {
-                { 5.0, 12.0 },
-                { 7.0, 12.0 },
-                { 7.0, 11.0 },
-                { 5.0, 11.0 }
-            };
-            _simulator.AddShape(new Trapezium(trapeziumPoints));
-            */
-
-            _simulator.AddShape(new Circle(8.0, 2.0, 0.5));
-            _simulator.AddShape(new Circle(8.0, 5.0, 0.5));
-            _simulator.AddShape(new Circle(8.0, 8.0, 0.5));
-            _simulator.AddShape(new Circle(8.0, 11.0, 0.5));
-            _simulator.AddShape(new Circle(8.0, 14.0, 0.5));
-        }
-
-        private void CalculateValues()
-        {
-            btnRun.Enabled = false;
-            _running = true;
-
             txtConsole.Clear();
+            btnRun.Enabled = false;
 
             Application.DoEvents();
 
-            _simulator.ComputeEquilibriumDistributionFunction(setFEqToResult: true);
+            _running = true;
 
             _counter = 0;
-            _maxT = Convert.ToInt32(nudIterations.Value);
-            while (_counter < _maxT && _running)
+            while (_running && _simulator.Step())
             {
-                _counter++;
-
-                _time = _counter * _simulator.Dt;
-
-                _simulator.ComputeEquilibriumDistributionFunction();
-                _simulator.ComputeNewValues();
+                _time = ++_counter * _simulator.Dt;
 
                 txtConsole.Text += $@"Iteration {_counter:d4}: t = {_time:N2}, f[100, 80] = {_simulator.GetFunctionValueAtPoint(100, 80)}{Environment.NewLine}";
                 txtConsole.SelectionStart = txtConsole.Text.Length - 1;
                 txtConsole.ScrollToCaret();
 
-                DrawFunction();
+                DrawDepths();
                 DrawSolids();
+                DrawArrows();
+                DrawParticlePath();
 
                 Application.DoEvents();
             }
@@ -121,9 +82,28 @@ namespace LatticeBoltzmann.Views
             btnRun.Enabled = true;
         }
 
+        private void DrawDepths()
+        {
+            var depth = _simulator.Depths;
+
+            for (var y = 0; y < _simulator.Ly; y++)
+            {
+                for (var x = 0; x < _simulator.Lx; x++)
+                {
+                    var depthValue = Convert.ToInt32(depth[x, y] * 255 / _simulator.H0);
+                    var brush = new SolidBrush(Color.FromArgb(depthValue / 3, depthValue / 3, depthValue));
+
+                    _solidsGraphics.FillRectangle(brush, x * 2, y * 2, 3, 3);
+                }
+            }
+
+            _solidsGraphics.Flush();
+            pbxSolids.Image = _solidsImage;
+        }
+
         private void DrawSolids()
         {
-            var isSolid = _simulator.GetSolids();
+            var isSolid = _simulator.Solids;
 
             for (var y = 0; y < _simulator.Ly; y++)
             {
@@ -131,7 +111,7 @@ namespace LatticeBoltzmann.Views
                 {
                     if (isSolid[x, y])
                     {
-                        _solidsGraphics.DrawRectangle(Pens.Black, x, y, 1, 1);
+                        _solidsGraphics.FillRectangle(Brushes.Black, x * 2, y * 2, 2, 2);
                     }
                 }
             }
@@ -140,72 +120,76 @@ namespace LatticeBoltzmann.Views
             pbxSolids.Image = _solidsImage;
         }
 
-        private void DrawFunction()
+        private void DrawArrows()
         {
-            var depth = _simulator.GetDepths();
-            var f = _simulator.GetFunction();
-            var sumF = new double[_simulator.Lx,_simulator.Ly];
-            var max = 0.00001;
 
-            for (var y = 0; y < _simulator.Ly; y++)
+            var spacing = 5;
+
+            for (var y = 0; y < _simulator.Ly; y += spacing)
             {
-                for (var x = 0; x < _simulator.Lx; x++)
+                for (var x = 0; x < _simulator.Lx; x += spacing)
                 {
-                    sumF[x, y] = f[1, x, y] + f[2, x, y] + f[8, x, y];
-                    sumF[x, y] -= f[4, x, y] + f[5, x, y] + f[6, x, y];
+                    var vector = _simulator.GetMovementVectorAtPoint(x, y);
 
-                    if (double.IsNaN(sumF[x, y]) || double.IsInfinity(sumF[x, y]))
-                    {
-                        sumF[x, y] = 0;
-                        _running = false;
-                        return;
-                    }
+                    var pen = new Pen(Color.Red) {EndCap = LineCap.ArrowAnchor};
+                    var startPoint = new Point((x - vector.X) * 2, (y - vector.Y) * 2);
+                    var endPoint = new Point((x + vector.X) * 2, (y + vector.Y) * 2);
 
-                    if (sumF[x, y] > max)
-                    {
-                        max = sumF[x, y];
-                    }
+                    _solidsGraphics.DrawLine(pen, startPoint, endPoint);
                 }
             }
+        }
 
-            if (max > 0.2)
+        private void DrawParticlePath()
+        {
+            var solid = _simulator.Solids;
+
+            foreach (var particle in _particles)
             {
-                _running = false;
-                return;
-            }
+                var x = particle.CurrentPosition.X / 2;
+                var y = particle.CurrentPosition.Y / 2;
 
-            var correction = Convert.ToInt32(128 / max);
-
-            for (var y = 0; y < _simulator.Ly; y++)
-            {
-                for (var x = 0; x < _simulator.Lx; x++)
+                if (IsWithinBounds(x, y))
                 {
-                    var correctedFunctionValue = sumF[x, y] > 0
-                        ? 128 + Convert.ToInt32(sumF[x, y] * correction)
-                        : 0;
-                
-                    if (correctedFunctionValue > 255)
+                    var vector = _simulator.GetMovementVectorAtPoint(x, y);
+                    var newX = x + vector.X;
+                    var newY = y + vector.Y;
+
+                    if (IsWithinBounds(newX, newY) && !solid[x + vector.X, y + vector.Y])
                     {
-                        correctedFunctionValue = 255;
+                        particle.Move(vector);
                     }
+                }
 
-                    var pen = correctedFunctionValue > 0 
-                        ? new Pen(Color.FromArgb(correctedFunctionValue, 128, 192 + Convert.ToInt32(depth[x, y] * 20))) 
-                        : Pens.Transparent;
-
-                    _solidsGraphics.DrawRectangle(pen, x, y, 1, 1);
+                for (var p = 0; p < particle.History.Count - 1; p++)
+                {
+                    _solidsGraphics.DrawLine(new Pen(particle.Colour), particle.History[p], particle.History[p+1]);
                 }
             }
+        }
 
-            _solidsGraphics.Flush();
-            pbxSolids.Image = _solidsImage;
+        private bool IsWithinBounds(int x, int y)
+        {
+            return x >= 0 && x < _simulator.Lx &&
+                   y >= 0 && y < _simulator.Ly;
         }
 
         #region UI hooks
 
         private void btnRun_Click(object sender, EventArgs e)
         {
-            CalculateValues();
+            RunSimulation();
+        }
+
+        private void btnPause_Click(object sender, EventArgs e)
+        {
+            _running = false;
+        }
+
+        private void btnReset_Click(object sender, EventArgs e)
+        {
+            _running = false;
+            _simulator.Init();
         }
 
         private string GetSettingValue(string propertyName)
@@ -231,6 +215,5 @@ namespace LatticeBoltzmann.Views
         }
 
         #endregion UI hooks
-
     }
 }

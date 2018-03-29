@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace LatticeBoltzmann.Models
 {
@@ -16,15 +12,24 @@ namespace LatticeBoltzmann.Models
         private const int X_INDEX = 0;
         private const int Y_INDEX = 1;
 
-        private readonly double[,] _points;
+        private readonly int[,] _points;
 
-        public Trapezium(double[,] points) 
-            : base(FindCentre(points)[X_INDEX], FindCentre(points)[Y_INDEX])
+        public Trapezium(double[,] points, int resolution) 
+            : base(FindCentre(points)[X_INDEX], FindCentre(points)[Y_INDEX], resolution)
         {
-            _points = points;
+            int xMax = points.GetLength(0), yMax = points.GetLength(1);
+            _points = new int[xMax, yMax];
+
+            for (var y = 0; y < yMax; y++)
+            {
+                for (var x = 0; x < xMax; x++)
+                {
+                    _points[x, y] = Convert.ToInt32(_points[x, y] * resolution);
+                }
+            }
         }
 
-        public override bool IsSolid(double x, double y)
+        public override bool IsSolid(int x, int y)
         {
             // Not inside top and bottom parallel lines
             if (!(y <= _points[TOP_LEFT, Y_INDEX]) || !(y >= _points[BOTTOM_LEFT, Y_INDEX]))

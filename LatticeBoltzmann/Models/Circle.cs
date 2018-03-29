@@ -6,15 +6,15 @@ namespace LatticeBoltzmann.Models
     {
         private readonly double _radius;
 
-        public Circle(double x, double y, double r)
-            : base(x, y)
+        public Circle(double x, double y, double r, int resolution)
+            : base(x, y, resolution)
         {
-            _radius = r;
+            _radius = Convert.ToInt32(r * resolution);
         }
 
-        public override bool IsSolid(double x, double y)
+        public override bool IsSolid(int x, int y)
         {
-            return Math.Sqrt(Math.Pow(x - X, 2) + Math.Pow(y - Y, 2)) <= _radius;
+            return Math.Sqrt(Math.Pow(X - x, 2) + Math.Pow(Y - y, 2)) <= _radius;
         }
     }
 }
