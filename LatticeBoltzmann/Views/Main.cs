@@ -122,8 +122,7 @@ namespace LatticeBoltzmann.Views
 
         private void DrawArrows()
         {
-
-            var spacing = 5;
+            const int spacing = 10;
 
             for (var y = 0; y < _simulator.Ly; y += spacing)
             {
@@ -135,7 +134,10 @@ namespace LatticeBoltzmann.Views
                     var startPoint = new Point((x - vector.X) * 2, (y - vector.Y) * 2);
                     var endPoint = new Point((x + vector.X) * 2, (y + vector.Y) * 2);
 
-                    _solidsGraphics.DrawLine(pen, startPoint, endPoint);
+                    if (IsWithinBounds(startPoint, 2) && IsWithinBounds(endPoint, 2))
+                    {
+                        _solidsGraphics.DrawLine(pen, startPoint, endPoint);
+                    }
                 }
             }
         }
@@ -168,10 +170,15 @@ namespace LatticeBoltzmann.Views
             }
         }
 
-        private bool IsWithinBounds(int x, int y)
+        private bool IsWithinBounds(Point point, int correctionFactor = 1)
         {
-            return x >= 0 && x < _simulator.Lx &&
-                   y >= 0 && y < _simulator.Ly;
+            return IsWithinBounds(point.X, point.Y, correctionFactor);
+        }
+
+        private bool IsWithinBounds(int x, int y, int correctionFactor = 1)
+        {
+            return x / correctionFactor >= 0 && x / correctionFactor < _simulator.Lx &&
+                   y / correctionFactor >= 0 && y / correctionFactor < _simulator.Ly;
         }
 
         #region UI hooks
